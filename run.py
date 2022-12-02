@@ -10,6 +10,7 @@ import platform
 import argparse
 import collections
 import re
+import glob
 from typing import Optional, Dict, List
 
 
@@ -210,6 +211,21 @@ PATCHES = {
         'ios_build.patch',
         'ios_proxy.patch',
     ],
+    'tvos': [
+        'add_dep_zlib.patch',
+        '4k.patch',
+        'add_license_dav1d.patch',
+        'macos_h264_encoder.patch',
+        'macos_screen_capture.patch',
+        'tvos_manual_audio_input.patch',
+        'ios_simulcast.patch',
+        'ssl_verify_callback_with_native_handle.patch',
+        'ios_build.patch',
+        'ios_proxy.patch',
+        'tvos_camera_preview_view.patch',
+        'tvos_camera_video_capturer.patch',
+        'tvos_mtl_renderer.patch'
+    ],
     'android': [
         'add_dep_zlib.patch',
         '4k.patch',
@@ -293,7 +309,7 @@ def get_webrtc(source_dir, patch_dir, version, target,
             if target == 'android':
                 with open('.gclient', 'a') as f:
                     f.write("target_os = [ 'android' ]\n")
-            if target == 'ios':
+            if target == 'ios' or target == 'tvos':
                 with open('.gclient', 'a') as f:
                     f.write("target_os = [ 'ios' ]\n")
             fetch = True
@@ -416,13 +432,14 @@ WEBRTC_BUILD_TARGETS_MACOS_COMMON = [
 WEBRTC_BUILD_TARGETS = {
     'macos_arm64': [*WEBRTC_BUILD_TARGETS_MACOS_COMMON, 'sdk:mac_framework_objc'],
     'ios': [*WEBRTC_BUILD_TARGETS_MACOS_COMMON, 'sdk:framework_objc'],
+    'tvos': [*WEBRTC_BUILD_TARGETS_MACOS_COMMON, 'sdk:framework_objc'],
     'android': ['sdk/android:libwebrtc', 'sdk/android:libjingle_peerconnection_so', 'sdk/android:native_api'],
 }
 
 
 def get_build_targets(target):
     ts = [':default']
-    if target not in ('windows_x86_64', 'windows_arm64', 'ios', 'macos_arm64'):
+    if target not in ('windows_x86_64', 'windows_arm64', 'ios', 'tvos', 'macos_arm64'):
         ts += ['buildtools/third_party/libc++']
     ts += WEBRTC_BUILD_TARGETS.get(target, [])
     return ts
@@ -430,6 +447,7 @@ def get_build_targets(target):
 
 IOS_ARCHS = ['simulator:x64', 'device:arm64']
 IOS_FRAMEWORK_ARCHS = ['simulator:x64', 'simulator:arm64', 'device:arm64']
+TVOS_ARCHS = ['device:arm64']
 
 
 def to_gn_args(gn_args: List[str], extra_gn_args: str) -> str:
@@ -463,13 +481,27 @@ def get_webrtc_version_info(version_info: VersionInfo):
     return [branch, commit, revision, maint]
 
 
+def get_files(path, extension, recursive=False):
+    """
+    A generator of filepaths for each file into path with the target extension.
+    If recursive, it will loop over subfolders as well.
+    """
+    if not recursive:
+        for file_path in glob.iglob(path + "/*." + extension):
+            yield file_path
+    else:
+        for root, dirs, files in os.walk(path):
+            for file_path in glob.iglob(root + "/*." + extension):
+                yield file_path
+
+
 def build_webrtc_ios(
         source_dir, build_dir, version_info: VersionInfo, extra_gn_args,
         webrtc_source_dir=None, webrtc_build_dir=None,
         debug=False,
         gen=False, gen_force=False,
         nobuild=False, nobuild_framework=False,
-        overlap_build_dir=False):
+        overlap_build_dir=False, tvos=False):
     if webrtc_source_dir is None:
         webrtc_source_dir = os.path.join(source_dir, 'webrtc')
     if webrtc_build_dir is None:
@@ -480,11 +512,11 @@ def build_webrtc_ios(
     mkdir_p(webrtc_build_dir)
 
     mkdir_p(os.path.join(webrtc_build_dir, 'framework'))
-    # - M92-M93 あたりで clang++: error: -gdwarf-aranges is not supported with -fembed-bitcode
-    #   がでていたので use_xcode_clang=false をすることで修正
-    # - M94 で use_xcode_clang=true かつ --bitcode を有効にしてビルドが通り bitcode が有効になってることを確認
-    # - M95 で再度 clang++: error: -gdwarf-aranges is not supported with -fembed-bitcode エラーがでるようになった
-    # - https://webrtc-review.googlesource.com/c/src/+/232600 が影響している可能性があるため use_lld=false を追加
+    # - around M92-M93 clang++: error: -gdwarf-aranges is not supported with -fembed-bitcode
+    # was fixed by using use_xcode_clang=false
+    # - Make sure use_xcode_clang=true and enable --bitcode on M94 and build passes and bitcode is enabled
+    # - M95 again gives clang++: error: -gdwarf-aranges is not supported with -fembed-bitcode error
+    # - add use_lld=false as https://webrtc-review.googlesource.com/c/src/+/232600 may affect
     gn_args_base = [
         'rtc_libvpx_build_vp9=true',
         'enable_dsyms=true',
@@ -495,7 +527,7 @@ def build_webrtc_ios(
         *COMMON_GN_ARGS,
     ]
 
-    # WebRTC.xcframework のビルド
+    # Build WebRTC.xcframework
     if not nobuild_framework:
         gn_args = [
             *gn_args_base,
@@ -517,7 +549,8 @@ def build_webrtc_ios(
             f.write(json.dumps(info, indent=4))
 
     libs = []
-    for device_arch in IOS_ARCHS:
+    architectures = TVOS_ARCHS if tvos else IOS_ARCHS
+    for device_arch in architectures:
         [device, arch] = device_arch.split(':')
         if overlap_build_dir:
             work_dir = os.path.join(webrtc_build_dir, 'framework', device, f'{arch}_libs')
@@ -543,6 +576,16 @@ def build_webrtc_ios(
                 *gn_args_base,
             ]
             gn_gen(webrtc_src_dir, work_dir, gn_args, extra_gn_args)
+        if tvos:
+            iphone_sdk_path = subprocess.getoutput('xcodebuild -sdk iphoneos -version Path')
+            iphone_simulator_path = subprocess.getoutput('xcodebuild -sdk iphonesimulator -version Path')
+            tv_sdk_path = subprocess.getoutput('xcodebuild -sdk appletvos -version Path')
+            tv_simulator_path = subprocess.getoutput('xcodebuild -sdk appletvsimulator -version Path')
+            for ninja_file_path in get_files(work_dir, 'ninja', recursive=True):
+                cmd(['sed', '-i', '--', 's#' + iphone_sdk_path + '#' + tv_sdk_path + '#g', ninja_file_path])
+                cmd(['sed', '-i', '--', 's#' + iphone_simulator_path + '#' + tv_simulator_path + '#g', ninja_file_path])
+                cmd(['sed', '-i', '--', 's/arm64-apple-ios/arm64-apple-tvos/g', ninja_file_path])
+                print("Patched for AppleTV %s" % ninja_file_path)
         if not nobuild:
             cmd(['ninja', '-C', work_dir, *get_build_targets('ios')])
             ar = '/usr/bin/ar'
@@ -900,6 +943,7 @@ TARGETS = [
     'raspberry-pi-os_armv8',
     'android',
     'ios',
+    'tvos'
 ]
 
 
@@ -911,7 +955,7 @@ def check_target(target):
         return target in ['windows_x86_64', 'windows_arm64']
     elif platform.system() == 'Darwin':
         logging.info(f'OS: {platform.system()}')
-        return target in ('macos_arm64', 'ios')
+        return target in ('macos_arm64', 'ios', 'tvos')
     elif platform.system() == 'Linux':
         release = read_version_file('/etc/os-release')
         os = release['NAME']
@@ -949,17 +993,17 @@ def check_target(target):
 
 def main():
     """
-    メモ
+    memo
 
-    ビルド方針:
-        - 引数無しで実行した場合、ビルドのみ行う
-            - もし必要とするファイルが存在しなければ取得や生成を行うが、新しい更新があるかどうかは確認しない。
-        - 各種引数を渡すと、更新や生成を行う。
-            - fetch 系: 各種ソースを更新する
-            - fetch-force 系: 一旦全て削除してから取得し直す
-            - gen 系: 既存のビルドディレクトリの上に gn gen を行う
-            - gen-force 系: 既存のビルドディレクトリは完全に削除してから gn gen をやり直す
-            - nobuild 系: ビルドを行わない
+     Build policy:
+         - If run without arguments, build only
+             - Get or create the required files if they don't exist, but don't check for new updates.
+         - Update and generate by passing various arguments.
+             - fetch family: update various sources
+             - fetch-force system: delete everything once and then fetch again
+             - gen line: do gn gen over existing build directory
+             - gen-force line: completely delete existing build directory and redo gn gen
+             - nobuild family: do not build
     """
     parser = argparse.ArgumentParser()
     sp = parser.add_subparsers()
@@ -982,8 +1026,8 @@ def main():
     bp.add_argument("--webrtc-overlap-ios-build-dir", action='store_true')
     bp.add_argument("--webrtc-build-dir")
     bp.add_argument("--webrtc-source-dir")
-    # 現在 build と package を分ける意味は無いのだけど、
-    # 今後複数のビルドを纏めてパッケージングする時に備えて別コマンドにしておく
+    # Currently there is no point in separating build and package,
+    # Make it a separate command in case you package multiple builds together in the future
     pp = sp.add_parser('package')
     pp.set_defaults(op='package')
     pp.add_argument("target", choices=TARGETS)
@@ -1062,12 +1106,12 @@ def main():
             if args.target in ['windows_x86_64', 'windows_arm64']:
                 cmd(['git', 'config', '--global', 'core.longpaths', 'true'])
 
-            # ソース取得
+            # get source
             get_webrtc(source_dir, patch_dir, version_info.webrtc_commit, args.target,
                        webrtc_source_dir=webrtc_source_dir,
                        fetch=args.webrtc_fetch, force=args.webrtc_fetch_force)
 
-            # ビルド
+            # build
             build_webrtc_args = {
                 'source_dir': source_dir,
                 'build_dir': build_dir,
@@ -1080,11 +1124,16 @@ def main():
                 'gen_force': args.webrtc_gen_force,
                 'nobuild': args.webrtc_nobuild,
             }
-            # iOS と Android は特殊すぎるので別枠行き
+            # iOS and Android are too special, go to another category
             if args.target == 'ios':
                 build_webrtc_ios(**build_webrtc_args,
                                  nobuild_framework=args.webrtc_nobuild_ios_framework,
                                  overlap_build_dir=args.webrtc_overlap_ios_build_dir)
+            elif args.target == 'tvos':
+                build_webrtc_ios(**build_webrtc_args,
+                                 nobuild_framework=args.webrtc_nobuild_ios_framework,
+                                 overlap_build_dir=args.webrtc_overlap_ios_build_dir,
+                                 tvos=True)
             elif args.target == 'android':
                 build_webrtc_android(**build_webrtc_args, nobuild_aar=args.webrtc_nobuild_android_aar)
             else:

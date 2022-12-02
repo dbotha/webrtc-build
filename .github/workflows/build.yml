@@ -11,18 +11,24 @@ on:
     tags:
       - '*'
 jobs:
-  build-ios:
+  build-apple:
     runs-on: macOS-11.0
+    strategy:
+      fail-fast: false
+      matrix:
+        name:
+          - ios
+          - tvos
     steps:
       - uses: actions/checkout@v2
       - name: Select Xcode 13.0
         run: sudo xcode-select --switch /Applications/Xcode_13.0.app/Contents/Developer
-      - name: Build WebRTC for iOS
+      - name: Build WebRTC for ${{ matrix.name }}
         run: |
-          python3 run.py build ios --webrtc-overlap-ios-build-dir
-          python3 run.py package ios --webrtc-overlap-ios-build-dir
+          python3 run.py build ${{ matrix.name }} --webrtc-overlap-ios-build-dir --webrtc-nobuild-ios-framework
+          python3 run.py package ${{ matrix.name }} --webrtc-overlap-ios-build-dir --webrtc-nobuild-ios-framework
       - name: Upload Artifact
         uses: actions/upload-artifact@v1
         with:
-          name: webrtc.ios.tar.gz
-          path: _package/ios/webrtc.tar.gz
+          name: webrtc.${{ matrix.name }}.tar.gz
+          path: _package/${{ matrix.name }}/webrtc.tar.gz
