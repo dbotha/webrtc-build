@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Print BUILD_TYPE_ARG
-        run: echo "BUILD_TYPE_ARG"
+        run: echo "$BUILD_TYPE_ARG"
 #      - name: Select Xcode 13.0
 #        run: sudo xcode-select --switch /Applications/Xcode_13.0.app/Contents/Developer
 #      - name: Build WebRTC for ${{ matrix.name }}
