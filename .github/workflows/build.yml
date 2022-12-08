@@ -45,8 +45,8 @@ jobs:
       matrix:
         name: [windows_x86_64, windows_arm64]
         build_type: [debug, release]
-      env:
-        BUILD_TYPE_ARG: ${{ matrix.build_type == 'debug' && '--debug' || '' }}
+    env:
+      BUILD_TYPE_ARG: ${{ matrix.build_type == 'debug' && '--debug' || '' }}
     runs-on: windows-2019
     steps:
       - uses: actions/checkout@v2
@@ -91,8 +91,8 @@ jobs:
           - ubuntu-20.04_x86_64
           - android
         build_type: [debug, release]
-      env:
-        BUILD_TYPE_ARG: ${{ matrix.build_type == 'debug' && '--debug' || '' }}
+    env:
+      BUILD_TYPE_ARG: ${{ matrix.build_type == 'debug' && '--debug' || '' }}
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
