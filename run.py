@@ -883,11 +883,6 @@ def package_webrtc(source_dir, build_dir, package_dir, target,
             (['libwebrtc.a'], ['lib', 'libwebrtc.a']),
             (['WebRTC.xcframework'], ['Frameworks', 'WebRTC.xcframework']),
         ]
-    elif target == 'ios':
-        files = [
-            (['libwebrtc.a'], ['lib', 'libwebrtc.a']),
-            (['framework', 'WebRTC.xcframework'], ['Frameworks', 'WebRTC.xcframework']),
-        ]
     elif target == 'android':
         # aar を展開して classes.jar を取り出す
         tmp = os.path.join(webrtc_build_dir, 'tmp')
