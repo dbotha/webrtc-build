@@ -26,7 +26,7 @@ jobs:
       - name: Build WebRTC for ${{ matrix.name }}
         run: |
           python3 run.py build ${{ matrix.name }} --webrtc-overlap-ios-build-dir --webrtc-nobuild-ios-framework
-          python3 run.py package ${{ matrix.name }} --webrtc-overlap-ios-build-dir --webrtc-nobuild-ios-framework
+          python3 run.py package ${{ matrix.name }} --webrtc-overlap-ios-build-dir
       - name: Upload Artifact
         uses: actions/upload-artifact@v1
         with:
