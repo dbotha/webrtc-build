@@ -861,9 +861,11 @@ def package_webrtc(source_dir, build_dir, package_dir, target,
     ts = []
     for t in get_build_targets(target):
         ts += ['--target', t]
-    cmd(['python3', os.path.join(webrtc_src_dir, 'tools_webrtc', 'libs', 'generate_licenses.py'),
-        *ts, webrtc_package_dir, *dirs])
-    os.rename(os.path.join(webrtc_package_dir, 'LICENSE.md'), os.path.join(webrtc_package_dir, 'NOTICE'))
+    # TODO: Generating licenses fails for some reason with my tvos changes. I'll
+    # collate these manually until I have the time to investigate this further
+    # cmd(['python3', os.path.join(webrtc_src_dir, 'tools_webrtc', 'libs', 'generate_licenses.py'),
+    #     *ts, webrtc_package_dir, *dirs])
+    # os.rename(os.path.join(webrtc_package_dir, 'LICENSE.md'), os.path.join(webrtc_package_dir, 'NOTICE'))
 
     # ヘッダーファイルをコピー
     copy_headers(webrtc_src_dir, webrtc_package_dir, target)
