@@ -186,7 +186,7 @@ jobs:
           asset_path: webrtc.${{ matrix.name }}-${{ matrix.build_type }}.tar.gz/webrtc.tar.gz
           asset_name: webrtc.${{ matrix.name }}-${{ matrix.build_type }}.tar.gz
           asset_content_type: application/gzip
-  # Describe separately because Content-Type is different only for Windows
+  # Describe separately because Content-Type is different only for Windows.
   upload-assets-windows:
     strategy:
       fail-fast: false
