@@ -634,6 +634,7 @@ def build_webrtc_android(
     gn_args_base = [
         f"is_debug={'true' if debug else 'false'}",
         f"is_java_debug={'true' if debug else 'false'}",
+        'use_custom_libcxx=false',
         *COMMON_GN_ARGS
     ]
 
